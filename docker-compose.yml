@@ -1,24 +1,44 @@
 version: "3.1"
 services:
  nginx:
-  image: nginx:alpine
+  image: bitnami/nginx
   container_name: my-nginx
   working_dir: /app
   volumes:
-   - ./app:/app
+   - ./app/laravel-swoole-tutorial:/app
    - ./docker/nginx/conf/nginx.conf:/etc/nginx/conf/nginx.conf:ro
    - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
   ports:
-   - "80:80" # HTTP
+   - "80:8080" # HTTP
+  networks: 
+   - laravel_net
 
  php:
-  build: docker/php
+  build:
+    context: .
+    dockerfile: ./docker/php/Dockerfile
   container_name: my-php
   working_dir: /app
   volumes:
    # Change directory name to your project name. Example "./app/YOUR_DIRECTORY_NAME:/app"
    - ./app/laravel-swoole-tutorial:/app
-   - ./docker/php/php-ini-overrides.ini:/etc/php/7.4/fpm/conf.d/99-overrides.ini
   ports:
    - "1215:1215" # Swoole port
-   # - "9000:9000" # PHP-FPM port
+   - "9000:9000" # PHP-FPM port
+  networks: 
+   - laravel_net
+
+ db:
+  container_name: my-db
+  image: mysql
+  environment: 
+    MYSQL_DATABASE: laravel_docker
+    MYSQL_USER: admin
+    MYSQL_PASSWORD: admin
+    MYSQL_ROOT_PASSWORD: root
+  networks: 
+    - laravel_net
+
+networks: 
+  laravel_net:
+    driver: bridge

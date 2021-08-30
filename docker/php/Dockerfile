@@ -1,25 +1,35 @@
-FROM php:7.4-fpm
-WORKDIR "/app"
+FROM php:7.4-fpm-alpine
 
-# Fix debconf warnings upon build
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
+RUN apk add --no-cache \
+        git \
+		acl \
+		fcgi \
+		file \
+		gettext \
+        supervisor \
+	;
 
-# Update packages & Install Git and Supervisor
-RUN apt-get update -y && \
-    apt-get install -yq git supervisor
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# Install GD extension
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg
-RUN docker-php-ext-install -j "$(nproc)" gd
+RUN set -exu; \
+    install-php-extensions pdo_mysql swoole mbstring exif gd intl zip pcntl apcu opcache bcmath @composer; \
+    rm /usr/local/bin/install-php-extensions;
 
-# Install Swoole extension
-RUN pecl install swoole
-RUN docker-php-ext-enable swoole
+WORKDIR /app
 
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+COPY ./app/laravel-swoole-tutorial .
 
-# Added supervisor config
-COPY supervisord.conf /etc/supervisor/conf.d/supervisor.conf
-CMD ["/usr/bin/supervisord", "-n"]
+RUN composer install --prefer-dist --no-scripts --no-progress; \
+    composer dump-autoload --classmap-authoritative;
+
+RUN	chmod +x artisan; sync;
+
+COPY ./docker/configuration-init.sh /usr/local/bin/configuration-init
+COPY ./docker/php/supervisord.conf /etc/supervisord.conf
+
+RUN set -exu; \
+    chmod +x /usr/local/bin/configuration-init; \
+    configuration-init; \
+    rm /usr/local/bin/configuration-init;
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
